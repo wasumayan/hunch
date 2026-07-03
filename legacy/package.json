@@ -1,0 +1,9 @@
+{
+  "name": "goonmarket",
+  "version": "1.0.0",
+  "description": "Private prediction markets for the group chat — Kalshi × Splitwise for friends",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

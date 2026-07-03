@@ -1,0 +1,11 @@
+# local data from the legacy prototype (contains hashed test credentials)
+legacy/data/
+
+# editor/OS noise
+.DS_Store
+Thumbs.db
+node_modules/
+
+# local scratch
+test.md
+.claude/
