@@ -71,8 +71,24 @@ powers the invite landing page), `redeem_invite`, `create_market`, `place_bet`,
 
 **Migrations** (in Supabase, chronological): `core_schema`,
 `access_helpers_and_write_rpcs`, `read_rpcs`, `seed_suggestions`,
-`fix_invite_code_generation`, `harden_function_surface`, `site_assets_table`.
+`fix_invite_code_generation`, `harden_function_surface`, `site_assets_table`,
+`virality_numeric_markets`.
 Make schema changes as *new* migrations (dashboard SQL editor or MCP `apply_migration`).
+The `virality_numeric_markets` SQL is committed at `supabase/migrations/20260703_virality_numeric_markets.sql`.
+
+**Virality / numeric markets** (migration `virality_numeric_markets`, applied + tested):
+- `markets.kind` = `binary` (existing YES/NO) or `numeric` (closest-guess). Plus optional
+  `post_url`, `metric`, `target_value`, and `resolved_value` (the "truth" for numeric).
+- `bets.guess` (numeric bets carry a guess, not a `side`; `side` is now nullable, with a
+  CHECK enforcing exactly one of side/guess).
+- New write RPCs: `place_guess(p_market, p_guess, p_amount_cents)` and
+  `resolve_numeric(p_market, p_final_value)`. `place_bet`/`resolve_market` now guard against
+  the wrong kind; numeric markets still void via `resolve_market(..., 'void')`.
+- Numeric payout = **winner-take-all, closest guess, ties split pro-rata by stake, cent-exact**
+  (the closest bettors absorb the flooring remainder so the market's ledger nets to $0).
+- Verified by REST e2e: closest wins exact pot, 3-way tie splits 134/133/133, ledger nets to
+  zero, subject blocked from guessing, guards fire, void refunds. Design spec:
+  `docs/superpowers/specs/2026-07-03-virality-betting-design.md`.
 
 **Gotchas learned the hard way**:
 - Functions pin `search_path = public`, so pgcrypto helpers like `gen_random_bytes`
@@ -116,13 +132,22 @@ Pattern used for the 64-check e2e suite (worth recreating in `tests/`):
 
 ## 6. Deployment status & pending one-time setup
 
+> **⚠️ FRONTEND HOSTING BLOCKER (found 2026-07-03).** The Supabase edge function serves the
+> `index` HTML as `text/plain` on **GET** requests (verified: `HEAD`→`text/html`, `GET`→`text/plain`;
+> `app.js` GET is fine as `text/javascript`). This is a Supabase/Cloudflare anti-phishing
+> downgrade of HTML bodies served from `*.supabase.co` — it happens *after* the function sets the
+> correct header, so it can't be fixed in the function. **Net effect: the app never renders in a
+> browser from the edge URL** (you see raw source). Backend is 100% fine — only the HTML entry
+> point is affected. **Fix = host the static frontend on Vercel** (repo root is already a working
+> static site: `index.html` + `styles.css` + `app.js` + `config.js`). Supabase stays the backend.
+
 | Item | Status |
 |---|---|
-| Live app (Supabase edge hosting) | ✅ https://esjantuavbshexzaoact.supabase.co/functions/v1/app |
-| Database, RLS, RPCs, seeds | ✅ applied, tested (64/64 e2e checks) |
+| Live app (Supabase edge hosting) | ⚠️ serves `index` HTML as `text/plain` on GET → does NOT render in browsers. Use Vercel (below) for the frontend. |
+| Database, RLS, RPCs, seeds | ✅ applied, tested (64/64 legacy + virality e2e) |
 | Supabase **Auth Site URL** | ⚠️ still `localhost:3000` — set it to the live URL at [Auth → URL Configuration](https://supabase.com/dashboard/project/esjantuavbshexzaoact/auth/url-configuration) so email-verification links land on the app |
 | Custom SMTP | ⚠️ optional — built-in sender is rate-limited (~2–4 emails/hr); add SMTP before onboarding many friends at once |
-| Vercel | ⏳ repo root is deploy-ready (`vercel.json`, `.vercelignore`); run `vercel login && vercel --prod`, then add the new URL to Supabase's auth redirect allowlist |
+| Vercel (now the required frontend host) | ⏳ **do this next.** Easiest from phone: vercel.com → Add New → Project → import `wasumayan/hunch` → Deploy (no build step; it's static). Or CLI: `vercel login && vercel --prod`. Then add the Vercel URL to Supabase Auth → URL Configuration (Site URL + redirect allowlist). |
 | Google OAuth / phone OTP | not configured (needs Google Cloud creds / Twilio in dashboard) |
 
 ## 7. Roadmap ideas (discussed, not built)

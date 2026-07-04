@@ -9,3 +9,6 @@ node_modules/
 # local scratch
 test.md
 .claude/
+.playwright-mcp/
+auth.png
+.claude/launch.json

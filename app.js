@@ -24,6 +24,44 @@ function money(cents, cur = 'USD', signed = false) {
   return (signed && cents > 0 ? '+' : '') + str;
 }
 const parseMoney = (v) => Math.round(parseFloat(v) * 100);
+const fmtNum = (n) => Number(n ?? 0).toLocaleString('en-US');
+const parseCount = (v) => { const n = Math.round(parseFloat(String(v).replace(/[, ]/g, ''))); return Number.isFinite(n) ? n : NaN; };
+
+// Social-post link: derive a platform glyph + clean host from a URL.
+function postMeta(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    const map = { 'x.com': '𝕏', 'twitter.com': '𝕏', 'instagram.com': '📸', 'tiktok.com': '🎵', 'youtube.com': '▶️', 'youtu.be': '▶️', 'reddit.com': '👽', 'facebook.com': '📘', 'threads.net': '@', 'linkedin.com': 'in', 'twitch.tv': '🎮' };
+    for (const k in map) { if (host === k || host.endsWith('.' + k)) return { icon: map[k], host }; }
+    return { icon: '🔗', host };
+  } catch { return { icon: '🔗', host: url }; }
+}
+function postLink(m) {
+  if (!m.post_url) return '';
+  const { icon, host } = postMeta(m.post_url);
+  return `<a class="post-link" href="${esc(m.post_url)}" target="_blank" rel="noopener">${icon} ${esc(host)} ↗</a>`;
+}
+
+// Numeric-market styles, injected once (keeps the deployed index/CSS row untouched).
+function injectNumStyles() {
+  if (document.getElementById('hunch-num')) return;
+  const s = document.createElement('style');
+  s.id = 'hunch-num';
+  s.textContent = `
+    .num-grid{display:flex;gap:9px;margin-top:13px}
+    .num-box{flex:1;text-align:center;border-radius:11px;padding:10px 6px;background:var(--panel)}
+    .num-box .v{font-weight:700;font-size:17px;letter-spacing:-0.01em}
+    .num-box small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.08em;opacity:.65;text-transform:uppercase;margin-bottom:2px}
+    .guess-pill{display:inline-flex;align-items:center;background:var(--coral-dim);color:var(--coral-dark);font-weight:700;border-radius:999px;padding:3px 11px;font-size:13px}
+    .post-link{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12.5px;color:var(--ink)!important;text-decoration:none!important;margin-top:10px}
+    .post-link:hover{border-color:var(--coral)}
+    .ladder-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+    .ladder-row:last-child{border-bottom:none}
+    .ladder-row.win{background:var(--yes-dim);margin:0 -14px;padding:10px 14px;border-radius:10px;border-bottom:none}
+    .delta{font-size:12px;color:var(--faint);font-weight:600}`;
+  document.head.appendChild(s);
+}
+injectNumStyles();
 
 function cents100(priceYes) { return Math.min(99, Math.max(1, Math.round(priceYes * 100))); }
 
@@ -86,6 +124,7 @@ function onClick(id, fn) {
 function statusTag(m) {
   if (m.status === 'void') return '<span class="chip">Voided</span>';
   if (m.status === 'resolved') {
+    if (m.kind === 'numeric') return `<span class="chip gold">🎯 ${esc(fmtNum(m.resolved_value))}${m.metric ? ' ' + esc(m.metric) : ''}</span>`;
     return m.resolution === 'yes' ? '<span class="chip yes">✓ YES</span>' : '<span class="chip no">✗ NO</span>';
   }
   if (m.betting_open) return '<span class="chip yes">● Open</span>';
@@ -384,6 +423,16 @@ async function groupView(groupId, tab = 'markets') {
   const marketCard = (m) => {
     const total = m.yes_pool + m.no_pool;
     const pY = total > 0 ? cents100(m.yes_pool / total) : 50;
+    const body = m.kind === 'numeric'
+      ? `<div class="num-grid">
+          <div class="num-box"><small>Pot</small><span class="v">${money(m.pot_cents, cur)}</span></div>
+          <div class="num-box"><small>Guesses</small><span class="v">${m.guess_count || 0}</span></div>
+          <div class="num-box"><small>${m.guess_count ? 'Range' : 'Unit'}</small><span class="v">${m.guess_count ? esc(fmtNum(m.guess_min)) + '–' + esc(fmtNum(m.guess_max)) : esc(m.metric || '#')}</span></div>
+        </div>`
+      : `<div class="price-pair">
+          <div class="price-box price-yes"><small>YES</small>${pY}¢</div>
+          <div class="price-box price-no"><small>NO</small>${100 - pY}¢</div>
+        </div>`;
     return `
     <a class="tile" href="#/m/${m.id}">
       <div class="card" style="padding:16px 18px">
@@ -392,13 +441,12 @@ async function groupView(groupId, tab = 'markets') {
           ${statusTag(m)}
         </div>
         ${m.subject_name ? `<div class="faint" style="margin-top:4px">about ${esc(m.subject_name)} · they judge, they can't bet</div>` : ''}
-        <div class="price-pair">
-          <div class="price-box price-yes"><small>YES</small>${pY}¢</div>
-          <div class="price-box price-no"><small>NO</small>${100 - pY}¢</div>
-        </div>
+        ${body}
         <div class="mc-meta faint">
-          <span>${money(total, cur)} vol</span>
-          <span>👥 ${m.bettors}</span>
+          ${m.kind === 'numeric'
+            ? `<span>🎯 closest guess${m.metric ? ' · ' + esc(m.metric) : ''}</span>`
+            : `<span>${money(total, cur)} vol</span><span>👥 ${m.bettors}</span>`}
+          ${m.post_url ? `<span>${postMeta(m.post_url).icon} post</span>` : ''}
           ${m.visibility === 'community' ? '<span class="chip coral" style="font-size:10.5px">community</span>' : ''}
           <span>${m.betting_open ? '⏳ ' + timeUntil(m.closes_at) : ''}</span>
         </div>
@@ -563,12 +611,26 @@ async function renderSuggested(groupId, members) {
 function marketComposer(groupId, members, prefill = {}) {
   const dflt = new Date(Date.now() + 24 * 3600 * 1000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const subjectId = prefill.subjectName ? (members.find((m) => m.display_name === prefill.subjectName)?.id || '') : '';
+  let kind = prefill.kind === 'numeric' ? 'numeric' : 'binary';
   openModal(`
     <h2>New market</h2>
-    <label>Question (resolves YES or NO)</label>
-    <input id="mQ" maxlength="160" placeholder="Will Priya actually run the half marathon?" value="${esc(prefill.question || '')}">
+    <label>Market type</label>
+    <div class="seg" id="mType">
+      <button type="button" data-k="binary" class="${kind === 'binary' ? 'on' : ''}">YES / NO</button>
+      <button type="button" data-k="numeric" class="${kind === 'numeric' ? 'on' : ''}">Closest number 🎯</button>
+    </div>
+    <label id="mQLabel"></label>
+    <input id="mQ" maxlength="160" value="${esc(prefill.question || '')}">
     <label>Resolution criteria (optional — settle the argument now)</label>
     <textarea id="mD" rows="2" placeholder="What counts, who verifies, what's the deadline.">${esc(prefill.details || '')}</textarea>
+    <label>📈 Attach a social post (optional)</label>
+    <input id="mPost" maxlength="500" placeholder="https://x.com/… — link the post everyone's watching" value="${esc(prefill.postUrl || '')}">
+    <label id="mMetricLabel"></label>
+    <input id="mMetric" maxlength="24" placeholder="views" value="${esc(prefill.metric || '')}">
+    <div id="mTargetBox">
+      <label>Target number (optional) — reaching it resolves YES</label>
+      <input id="mTarget" type="text" inputmode="numeric" placeholder="e.g. 50000">
+    </div>
     <label>Betting closes</label>
     <input id="mC" type="datetime-local" value="${dflt}">
     <label>Who is this about? (optional)</label>
@@ -576,7 +638,7 @@ function marketComposer(groupId, members, prefill = {}) {
       <option value="">Nobody in particular</option>
       ${members.map((m) => `<option value="${m.id}" ${m.id === subjectId ? 'selected' : ''}>${esc(m.display_name)}</option>`).join('')}
     </select>
-    <div class="faint" style="margin-top:4px">The subject gets to resolve the market but can't bet on it.</div>
+    <div class="faint" style="margin-top:4px">The subject resolves the market but can't bet on it — perfect if it's their own post.</div>
     <label>Audience</label>
     <select id="mVis">
       <option value="group">This circle only</option>
@@ -590,6 +652,16 @@ function marketComposer(groupId, members, prefill = {}) {
     </div>
     <div style="margin-top:20px"><button class="btn-coral btn-wide" id="mGo">Open market</button></div>
   `);
+  const updateKindUI = () => {
+    const numeric = kind === 'numeric';
+    document.getElementById('mQLabel').textContent = numeric ? 'Question (players guess a number)' : 'Question (resolves YES or NO)';
+    document.getElementById('mQ').placeholder = numeric ? 'How many views will Priya’s reel get by Sunday?' : 'Will Priya actually run the half marathon?';
+    document.getElementById('mMetricLabel').textContent = numeric ? 'Unit — what are we counting? (e.g. views, likes)' : 'Unit / metric (optional)';
+    document.getElementById('mTargetBox').style.display = numeric ? 'none' : 'block';
+    document.querySelectorAll('#mType button').forEach((b) => b.classList.toggle('on', b.dataset.k === kind));
+  };
+  document.querySelectorAll('#mType button').forEach((b) => { b.onclick = () => { kind = b.dataset.k; updateKindUI(); }; });
+  updateKindUI();
   document.getElementById('mVis').onchange = (e) => {
     document.getElementById('gateBox').style.display = e.target.value === 'community' ? 'block' : 'none';
   };
@@ -597,6 +669,11 @@ function marketComposer(groupId, members, prefill = {}) {
     const closesAt = new Date(document.getElementById('mC').value);
     if (isNaN(closesAt)) throw new Error('Pick a close time');
     const vis = document.getElementById('mVis').value;
+    let target = null;
+    if (kind === 'binary') {
+      const t = document.getElementById('mTarget').value.trim();
+      if (t) { target = parseCount(t); if (!Number.isFinite(target) || target < 0) throw new Error('Target must be a whole number'); }
+    }
     const mid = await rpc('create_market', {
       p_group: groupId,
       p_question: document.getElementById('mQ').value,
@@ -606,6 +683,10 @@ function marketComposer(groupId, members, prefill = {}) {
       p_gate_domain: vis === 'community' ? document.getElementById('mDomain').value.trim() || null : null,
       p_gate_tag: vis === 'community' ? document.getElementById('mTag').value.trim() || null : null,
       p_subject: document.getElementById('mSubject').value || null,
+      p_kind: kind,
+      p_post_url: document.getElementById('mPost').value.trim() || null,
+      p_metric: document.getElementById('mMetric').value.trim() || null,
+      p_target: target,
     });
     closeModal();
     location.hash = `#/m/${mid}`;
@@ -617,6 +698,7 @@ function marketComposer(groupId, members, prefill = {}) {
 async function marketView(marketId) {
   const d = await rpc('get_market_detail', { p_market: marketId });
   const m = d.market;
+  if (m.kind === 'numeric') { numericMarketView(marketId, d); return; }
   const cur = d.currency;
   const total = m.yes_pool + m.no_pool;
   const pY = total > 0 ? cents100(m.yes_pool / total) : 50;
@@ -798,6 +880,201 @@ async function marketView(marketId) {
   });
 }
 
+// ---------- numeric (closest-guess / virality) market ----------
+
+function numericMarketView(marketId, d) {
+  const m = d.market;
+  const cur = d.currency;
+  const metric = m.metric || '';
+  const unit = metric ? ' ' + esc(metric) : '';
+  const positions = (d.positions || []).slice();
+  const myPos = positions.filter((p) => p.user_id === myProfile?.id);
+  const resolved = m.status === 'resolved';
+  const truth = m.resolved_value;
+
+  const prevGuess = document.getElementById('guessVal')?.value || '';
+  const prevStake = document.getElementById('guessStake')?.value || '';
+
+  const board = positions.map((p) => ({ ...p, delta: resolved ? Math.abs(Number(p.guess) - Number(truth)) : null }));
+  const minDelta = resolved && board.length ? Math.min(...board.map((p) => p.delta)) : null;
+  if (resolved) board.sort((a, b) => a.delta - b.delta || b.amount_cents - a.amount_cents);
+  else board.sort((a, b) => b.amount_cents - a.amount_cents);
+
+  const banner = resolved
+    ? `<div class="banner yes">Final: <b>${esc(fmtNum(truth))}${unit}</b> — closest guess took the ${money(m.pot_cents, cur)} pot · called by ${esc(m.resolved_by_name)}</div>`
+    : m.status === 'void'
+      ? `<div class="banner void">Voided by ${esc(m.resolved_by_name)} — all stakes refunded</div>`
+      : d.is_subject
+        ? `<div class="banner info">This market is about you. You call the final number — but your money stays in your pocket.</div>`
+        : '';
+
+  app.innerHTML = `
+    ${topbar()}
+    ${d.am_member ? `<a href="#/g/${m.group_id}" class="muted">← ${esc(d.group_name)}</a>` : `<span class="muted">hosted by ${esc(d.group_name)}</span>`}
+    <div style="margin-top:14px" class="spread">
+      <h1 style="font-size:21px; line-height:1.35">${esc(m.question)}</h1>
+      ${statusTag(m)}
+    </div>
+    ${m.details ? `<p class="muted" style="margin-top:8px">${esc(m.details)}</p>` : ''}
+    <div class="row faint" style="margin-top:8px; flex-wrap:wrap">
+      <span>by ${esc(m.creator_name)}</span>
+      <span class="chip coral">🎯 closest guess</span>
+      ${m.subject_name ? `<span class="chip coral">about ${esc(m.subject_name)}</span>` : ''}
+      ${m.visibility === 'community' ? `<span class="chip">community${m.gate_domain ? ` · @${esc(m.gate_domain)}` : ''}${m.gate_tag ? ` · #${esc(m.gate_tag)}` : ''}</span>` : ''}
+      <span>· ${m.betting_open ? timeUntil(m.closes_at) : ['resolved', 'void'].includes(m.status) ? '' : 'betting closed'}</span>
+    </div>
+    ${postLink(m)}
+
+    <div class="num-grid">
+      <div class="num-box"><small>Pot</small><span class="v">${money(m.pot_cents, cur)}</span></div>
+      <div class="num-box"><small>Guesses</small><span class="v">${m.guess_count || 0}</span></div>
+      <div class="num-box"><small>${m.guess_count ? 'Range' : (metric ? 'Unit' : 'Guess')}</small><span class="v">${m.guess_count ? esc(fmtNum(m.guess_min)) + '–' + esc(fmtNum(m.guess_max)) : (metric ? esc(metric) : '—')}</span></div>
+    </div>
+
+    ${banner ? `<div style="margin-top:16px">${banner}</div>` : ''}
+
+    ${m.betting_open && !d.is_subject ? `
+      <div class="section-title">Make your guess</div>
+      <div class="card">
+        <label>Your guess${metric ? ` (${esc(metric)})` : ''}</label>
+        <input id="guessVal" type="text" inputmode="numeric" placeholder="e.g. 42000">
+        <label>Stake (${esc(cur)})${d.max_bet_cents ? `<span style="float:right; text-transform:none">max ${money(d.max_bet_cents, cur)}</span>` : ''}</label>
+        <input id="guessStake" type="number" min="0.01" step="0.01" placeholder="10.00">
+        <div class="chips-row">
+          ${[5, 10, 25, 50].map((v) => `<button data-amt="${v}">${SYM[cur] || ''}${v}</button>`).join('')}
+        </div>
+        <div class="payout-preview" id="gpreview"></div>
+        <div style="margin-top:14px"><button class="btn-coral btn-wide" id="guessGo">Lock in guess</button></div>
+      </div>` : ''}
+
+    ${!m.betting_open && ['open', 'locked'].includes(m.status) ? `
+      <div class="empty" style="padding:18px">Betting is closed — waiting on the final number.</div>` : ''}
+
+    ${d.can_resolve && !['resolved', 'void'].includes(m.status) ? `
+      <div class="section-title">Referee controls</div>
+      <div class="resolve-box">
+        <div class="muted">${d.is_subject ? 'This one is about you — enter the honest final number.' : 'Enter the final number. Closest guess takes the whole pot.'}</div>
+        <label>Final ${metric ? esc(metric) : 'value'}</label>
+        <input id="finalVal" type="text" inputmode="numeric" placeholder="e.g. 47300">
+        <div class="resolve-btns">
+          <button class="rb-yes" id="resNum">Resolve with this number</button>
+          <button class="rb-void" id="resVoid">Void</button>
+          ${m.betting_open ? '<button class="rb-void" id="lockBtn">Lock betting</button>' : ''}
+        </div>
+      </div>` : ''}
+
+    ${myPos.length ? `
+      <div class="section-title">Your guess${myPos.length > 1 ? 'es' : ''}</div>
+      <div class="card">
+        ${myPos.map((p) => `
+          <div class="pos-row">
+            <span class="guess-pill">${esc(fmtNum(p.guess))}${unit}</span>
+            <b>${money(p.amount_cents, cur)}</b>
+          </div>`).join('')}
+      </div>` : ''}
+
+    ${['resolved', 'void'].includes(m.status) && (d.payouts || []).length ? `
+      <div class="section-title">Payouts</div>
+      <div class="card">
+        ${d.payouts.map((p) => `
+          <div class="pos-row">
+            <div class="row">${avatar(p.display_name)} <b>${esc(p.display_name)}</b> ${p.kind === 'refund' ? '<span class="faint">refund</span>' : ''}</div>
+            <span class="pnl-up">+${money(p.amount_cents, cur)}</span>
+          </div>`).join('')}
+      </div>` : ''}
+
+    <div class="section-title spread">${resolved ? 'The board' : 'Guesses'}
+      ${d.am_member || d.can_resolve ? `<button class="linkbtn" id="shareMarket">Share this event ↗</button>` : ''}
+    </div>
+    <div class="card">
+      ${board.length === 0 ? '<div class="empty">No guesses yet — someone has to go first.</div>' : board.map((p) => `
+        <div class="ladder-row ${resolved && p.delta === minDelta ? 'win' : ''}">
+          <div class="row">${avatar(p.display_name, true)} <a href="#/u/${p.user_id}" style="font-weight:600; color:inherit">${esc(p.display_name)}</a>${resolved && p.delta === minDelta ? ' <span class="chip yes" style="font-size:10.5px">🎯 winner</span>' : ''}</div>
+          <div class="row">
+            ${resolved ? `<span class="delta">Δ ${esc(fmtNum(p.delta))}</span>` : ''}
+            <span class="guess-pill">${esc(fmtNum(p.guess))}${unit}</span>
+            <b>${money(p.amount_cents, cur)}</b>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div class="section-title">Trash talk</div>
+    <div class="card">
+      ${(d.comments || []).map((c) => `
+        <div class="comment">
+          <div class="row" style="align-items:baseline; gap:8px">${avatar(c.display_name, true)} <b style="font-size:13.5px">${esc(c.display_name)}</b> <span class="faint">${timeAgo(c.created_at)}</span></div>
+          <div style="margin-top:4px; margin-left:34px">${esc(c.body)}</div>
+        </div>`).join('')}
+      <div class="row" style="margin-top:${(d.comments || []).length ? '12px' : '0'}">
+        <input id="commentBody" placeholder="Talk your talk…" maxlength="500">
+        <button class="btn-ghost" id="commentGo">Send</button>
+      </div>
+    </div>`;
+
+  wireTopbar();
+  onClick('shareMarket', () => copyInvite('market', { market: marketId }));
+
+  if (m.betting_open && !d.is_subject) {
+    const gv = document.getElementById('guessVal');
+    const gs = document.getElementById('guessStake');
+    gv.value = prevGuess; gs.value = prevStake;
+    const preview = document.getElementById('gpreview');
+    const drawSlip = () => {
+      const guess = parseCount(gv.value);
+      const c = parseMoney(gs.value);
+      if (!Number.isFinite(guess)) { preview.innerHTML = '<span class="muted">Enter your number to lock it in.</span>'; return; }
+      const potAfter = m.pot_cents + (c > 0 ? c : 0);
+      preview.innerHTML = `
+        <div class="spread">
+          <span class="muted">If you're closest to the final ${esc(metric || 'number')}</span>
+          <b style="color:var(--yes)">you take ${money(potAfter, cur)}</b>
+        </div>
+        <div class="faint" style="margin-top:2px">Your guess: <b>${esc(fmtNum(guess))}${unit}</b>${c > 0 ? ` · stake ${money(c, cur)}` : ''} · winner takes the whole pot</div>`;
+    };
+    app.querySelectorAll('.chips-row button').forEach((b) => { b.onclick = () => { gs.value = b.dataset.amt; drawSlip(); }; });
+    gv.addEventListener('input', drawSlip);
+    gs.addEventListener('input', drawSlip);
+    drawSlip();
+    onClick('guessGo', async () => {
+      const guess = parseCount(gv.value);
+      const c = parseMoney(gs.value);
+      if (!Number.isFinite(guess) || guess < 0) throw new Error('Enter a whole-number guess (0 or more)');
+      if (!c || c <= 0) throw new Error('Enter a positive stake');
+      await rpc('place_guess', { p_market: marketId, p_guess: guess, p_amount_cents: c });
+      toast(`Guess locked — ${fmtNum(guess)}${unit} for ${money(c, cur)}`);
+      marketView(marketId);
+    });
+  }
+
+  const resolveNum = async () => {
+    const fv = parseCount(document.getElementById('finalVal').value);
+    if (!Number.isFinite(fv) || fv < 0) throw new Error('Enter the final number (0 or more)');
+    if (!confirm(`Resolve with ${fmtNum(fv)}${unit}? Closest guess takes the whole pot — this can't be undone.`)) return;
+    await rpc('resolve_numeric', { p_market: marketId, p_final_value: fv });
+    toast(`Resolved at ${fmtNum(fv)}${unit} — closest guess paid`);
+    marketView(marketId);
+  };
+  onClick('resNum', resolveNum);
+  onClick('resVoid', async () => {
+    if (!confirm('Void this market and refund every stake? This can\'t be undone.')) return;
+    await rpc('resolve_market', { p_market: marketId, p_outcome: 'void' });
+    toast('Market voided, stakes refunded');
+    marketView(marketId);
+  });
+  onClick('lockBtn', async () => { await rpc('lock_market', { p_market: marketId }); toast('Betting locked'); marketView(marketId); });
+
+  const sendComment = async () => {
+    const input = document.getElementById('commentBody');
+    if (!input.value.trim()) return;
+    await rpc('post_comment', { p_market: marketId, p_body: input.value });
+    marketView(marketId);
+  };
+  onClick('commentGo', sendComment);
+  document.getElementById('commentBody').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendComment().catch((err) => toast(err.message, true));
+  });
+}
+
 // ---------- community ----------
 
 async function communityView() {
@@ -812,6 +1089,16 @@ async function communityView() {
         : feed.map((m) => {
           const total = m.yes_pool + m.no_pool;
           const pY = total > 0 ? cents100(m.yes_pool / total) : 50;
+          const body = m.kind === 'numeric'
+            ? `<div class="num-grid">
+                <div class="num-box"><small>Pot</small><span class="v">${money(m.pot_cents, m.currency)}</span></div>
+                <div class="num-box"><small>Guesses</small><span class="v">${m.guess_count || 0}</span></div>
+                <div class="num-box"><small>${m.guess_count ? 'Range' : 'Unit'}</small><span class="v">${m.guess_count ? esc(fmtNum(m.guess_min)) + '–' + esc(fmtNum(m.guess_max)) : esc(m.metric || '#')}</span></div>
+              </div>`
+            : `<div class="price-pair">
+                <div class="price-box price-yes"><small>YES</small>${pY}¢</div>
+                <div class="price-box price-no"><small>NO</small>${100 - pY}¢</div>
+              </div>`;
           return `
           <a class="tile" href="#/m/${m.id}">
             <div class="card" style="padding:16px 18px">
@@ -819,13 +1106,11 @@ async function communityView() {
                 <div class="mc-q">${esc(m.question)}</div>
                 <span class="chip yes">● Open</span>
               </div>
-              <div class="price-pair">
-                <div class="price-box price-yes"><small>YES</small>${pY}¢</div>
-                <div class="price-box price-no"><small>NO</small>${100 - pY}¢</div>
-              </div>
+              ${body}
               <div class="mc-meta faint">
                 <span>${esc(m.group_name)}</span>
-                <span>${money(total, m.currency)} vol</span>
+                ${m.kind === 'numeric' ? `<span>🎯 closest guess${m.metric ? ' · ' + esc(m.metric) : ''}</span>` : `<span>${money(total, m.currency)} vol</span>`}
+                ${m.post_url ? `<span>${postMeta(m.post_url).icon} post</span>` : ''}
                 ${m.gate_domain ? `<span class="chip" style="font-size:10.5px">@${esc(m.gate_domain)}</span>` : ''}
                 ${m.gate_tag ? `<span class="chip" style="font-size:10.5px">#${esc(m.gate_tag)}</span>` : ''}
                 <span>⏳ ${timeUntil(m.closes_at)}</span>
@@ -941,8 +1226,10 @@ function safeToRefresh() {
   if (document.querySelector('.modal-back')) return false;
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return false;
-  const amt = document.getElementById('betAmt');
-  if (amt && amt.value) return false;
+  for (const id of ['betAmt', 'guessVal', 'guessStake', 'finalVal']) {
+    const el = document.getElementById(id);
+    if (el && el.value) return false;
+  }
   return true;
 }
 
