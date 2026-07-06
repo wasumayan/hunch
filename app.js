@@ -362,6 +362,21 @@ async function homeView() {
             </div>
           </a>`).join('')}
       </div>` : ''}
+    ${(d.discoverable || []).length ? `
+      <div class="section-title">Discover circles</div>
+      <div class="stack">
+        ${d.discoverable.map((g) => `
+          <div class="card spread">
+            <div class="row">
+              <span class="tile-emoji">${esc(g.emoji)}</span>
+              <div>
+                <div style="font-weight:600; font-size:15.5px">${esc(g.name)}</div>
+                <div class="faint" style="margin-top:3px">🔓 open circle · 👥 ${g.member_count} member${g.member_count === 1 ? '' : 's'}</div>
+              </div>
+            </div>
+            <button class="btn-ghost req-circle" data-id="${esc(g.id)}" ${g.requested ? 'disabled' : ''}>${g.requested ? 'Requested ✓' : 'Request to join'}</button>
+          </div>`).join('')}
+      </div>` : ''}
     ${(d.featured || []).length ? `
       <div class="section-title">Circles buzzing right now</div>
       <div class="stack">
@@ -397,6 +412,17 @@ async function homeView() {
       } catch (err) { b.disabled = false; toast(err.message, true); }
     };
   });
+  document.querySelectorAll('.req-circle').forEach((b) => {
+    if (b.disabled) return;
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await rpc('request_join_circle', { p_group: b.dataset.id });
+        b.textContent = 'Requested ✓';
+        toast('Request sent — an admin will let you in');
+      } catch (err) { b.disabled = false; toast(err.message, true); }
+    };
+  });
 
   onClick('inviteAppBtn', () => copyInvite('app'));
   onClick('joinGo', async () => {
@@ -422,6 +448,11 @@ async function homeView() {
       </select>
       <label>Max bet per wager (optional)</label>
       <input id="gMax" type="number" min="0.01" step="0.01" placeholder="e.g. 20.00 — leave blank for no cap">
+      <label>Who can find this circle?</label>
+      <select id="gVis">
+        <option value="private" selected>🔒 Private — invite-only, hidden from everyone</option>
+        <option value="discoverable">🔓 Discoverable — shows in Discover; people can request to join</option>
+      </select>
       <div class="faint" style="margin-top:8px">Bets are tracked in real money. Nobody deposits anything — Hunch keeps score and Settle Up tells everyone who owes whom.</div>
       <div style="margin-top:20px"><button class="btn-coral btn-wide" id="gGo">Create circle</button></div>
     `);
@@ -432,6 +463,7 @@ async function homeView() {
         p_emoji: document.getElementById('gEmoji').value,
         p_currency: document.getElementById('gCur').value,
         p_max_bet_cents: maxRaw ? parseMoney(maxRaw) : null,
+        p_visibility: document.getElementById('gVis').value,
       });
       closeModal();
       location.hash = `#/g/${gid}`;
@@ -518,6 +550,18 @@ async function groupView(groupId, tab = 'markets') {
         <button class="btn-coral" id="newMarketBtn">+ Market</button>
       </div>
     </div>
+    ${(d.join_requests || []).length ? `
+      <div class="card" style="border-color:var(--coral); margin-top:12px">
+        <div class="section-title" style="margin-top:0">Join requests · ${d.join_requests.length}</div>
+        ${d.join_requests.map((r) => `
+          <div class="pos-row">
+            <div class="row">${avatar(r.display_name)} <div><b>${esc(r.display_name)}</b> <span class="faint">@${esc(r.username)}</span></div></div>
+            <div class="row">
+              <button class="btn-ghost jr-yes" data-u="${esc(r.user_id)}">Approve</button>
+              <button class="linkbtn jr-no" data-u="${esc(r.user_id)}">Decline</button>
+            </div>
+          </div>`).join('')}
+      </div>` : ''}
     <div class="tabs">
       ${[['markets', 'Markets'], ['leaderboard', 'Leaderboard'], ['suggested', 'Suggested'], ['activity', 'Activity'], ['settle', 'Settle Up']].map(([t, name]) => `
         <button data-tab="${t}" class="${tab === t ? 'on' : ''}">${name}</button>`).join('')}
@@ -534,6 +578,18 @@ async function groupView(groupId, tab = 'markets') {
   wireTopbar();
 
   app.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => groupView(groupId, b.dataset.tab); });
+
+  app.querySelectorAll('.jr-yes, .jr-no').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      const approve = b.classList.contains('jr-yes');
+      try {
+        await rpc('resolve_join_request', { p_group: groupId, p_user: b.dataset.u, p_approve: approve });
+        toast(approve ? 'Added to the circle 🎉' : 'Request declined');
+        groupView(groupId, tab);
+      } catch (err) { b.disabled = false; toast(err.message, true); }
+    };
+  });
 
   onClick('inviteBtn', () => copyInvite('group', { group: groupId }));
   onClick('newMarketBtn', () => marketComposer(groupId, members));
