@@ -705,6 +705,13 @@ function marketComposer(groupId, members, prefill = {}) {
   let kind = prefill.kind === 'numeric' ? 'numeric' : 'binary';
   openModal(`
     <h2>New market</h2>
+    <div class="card" style="background:var(--panel); border:none; box-shadow:none; padding:14px; margin-bottom:14px">
+      <label style="margin-top:0">✨ Describe it — let AI draft it</label>
+      <div class="row">
+        <input id="aiText" placeholder="e.g. will the lakers beat the celtics friday" style="flex:1" autocomplete="off">
+        <button class="btn-primary" id="aiGo" type="button">Draft</button>
+      </div>
+    </div>
     <label>Market type</label>
     <div class="seg" id="mType">
       <button type="button" data-k="binary" class="${kind === 'binary' ? 'on' : ''}">YES / NO</button>
@@ -753,6 +760,24 @@ function marketComposer(groupId, members, prefill = {}) {
   };
   document.querySelectorAll('#mType button').forEach((b) => { b.onclick = () => { kind = b.dataset.k; updateKindUI(); }; });
   updateKindUI();
+  onClick('aiGo', async () => {
+    const t = document.getElementById('aiText').value.trim();
+    if (!t) throw new Error('Describe your bet first');
+    const { data, error } = await sb.functions.invoke('draft_market', { body: { text: t } });
+    if (error || !data) throw new Error('AI draft failed — try again');
+    if (data.error) throw new Error(data.error);
+    document.getElementById('mQ').value = data.question || '';
+    kind = data.kind === 'numeric' ? 'numeric' : 'binary';
+    updateKindUI();
+    if (data.metric) document.getElementById('mMetric').value = data.metric;
+    if (data.details) document.getElementById('mD').value = data.details;
+    if (data.post_url) document.getElementById('mPost').value = data.post_url;
+    if (data.closes_at) {
+      const dt = new Date(data.closes_at);
+      if (!isNaN(dt)) document.getElementById('mC').value = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    toast('Drafted ✨ — tweak anything, then open the market');
+  });
   document.getElementById('mVis').onchange = (e) => {
     document.getElementById('gateBox').style.display = e.target.value === 'community' ? 'block' : 'none';
   };
