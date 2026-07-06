@@ -1,3 +1,9 @@
 legacy
 test.md
 .claude
+.remember
+.playwright-mcp
+auth.png
+docs
+supabase
+*.md

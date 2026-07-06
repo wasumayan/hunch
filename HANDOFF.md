@@ -132,22 +132,22 @@ Pattern used for the 64-check e2e suite (worth recreating in `tests/`):
 
 ## 6. Deployment status & pending one-time setup
 
-> **⚠️ FRONTEND HOSTING BLOCKER (found 2026-07-03).** The Supabase edge function serves the
-> `index` HTML as `text/plain` on **GET** requests (verified: `HEAD`→`text/html`, `GET`→`text/plain`;
-> `app.js` GET is fine as `text/javascript`). This is a Supabase/Cloudflare anti-phishing
-> downgrade of HTML bodies served from `*.supabase.co` — it happens *after* the function sets the
-> correct header, so it can't be fixed in the function. **Net effect: the app never renders in a
-> browser from the edge URL** (you see raw source). Backend is 100% fine — only the HTML entry
-> point is affected. **Fix = host the static frontend on Vercel** (repo root is already a working
-> static site: `index.html` + `styles.css` + `app.js` + `config.js`). Supabase stays the backend.
+> **✅ FRONTEND NOW HOSTED ON VERCEL — https://hunch-zeta.vercel.app** (deployed 2026-07-05).
+> Background: the Supabase edge function serves the `index` HTML as `text/plain` on **GET**
+> (`HEAD`→`text/html`, `GET`→`text/plain`; `app.js` GET is fine) — a platform anti-phishing
+> downgrade of HTML on `*.supabase.co`, unfixable in the function. So the frontend is served from
+> Vercel (repo root is a plain static site), which returns real `text/html`. Supabase stays the
+> backend. Redeploy after edits: `npx vercel@latest deploy --prod --yes` from repo root.
 
 | Item | Status |
 |---|---|
-| Live app (Supabase edge hosting) | ⚠️ serves `index` HTML as `text/plain` on GET → does NOT render in browsers. Use Vercel (below) for the frontend. |
+| Live app (frontend) | ✅ **https://hunch-zeta.vercel.app** (Vercel static). Verified end-to-end in a browser incl. the numeric/virality flow. |
+| Live app (Supabase edge hosting) | ⛔ deprecated for the frontend — serves `index` HTML as `text/plain` on GET. Backend RPCs/REST are unaffected. |
 | Database, RLS, RPCs, seeds | ✅ applied, tested (64/64 legacy + virality e2e) |
 | Supabase **Auth Site URL** | ⚠️ still `localhost:3000` — set it to the live URL at [Auth → URL Configuration](https://supabase.com/dashboard/project/esjantuavbshexzaoact/auth/url-configuration) so email-verification links land on the app |
 | Custom SMTP | ⚠️ optional — built-in sender is rate-limited (~2–4 emails/hr); add SMTP before onboarding many friends at once |
-| Vercel (now the required frontend host) | ⏳ **do this next.** Easiest from phone: vercel.com → Add New → Project → import `wasumayan/hunch` → Deploy (no build step; it's static). Or CLI: `vercel login && vercel --prod`. Then add the Vercel URL to Supabase Auth → URL Configuration (Site URL + redirect allowlist). |
+| Vercel (frontend host) | ✅ deployed & live at https://hunch-zeta.vercel.app (project `hunch`, account `wasumayan`). Not git-connected — redeploy with `npx vercel@latest deploy --prod --yes`, or connect the repo in the Vercel dashboard for push-to-deploy. |
+| Supabase Auth Site URL | ⚠️ **last manual step for email signups:** set Site URL + redirect allow-list to `https://hunch-zeta.vercel.app` (Auth → URL Configuration). Password sign-in already works; this only affects signup-confirmation email links. |
 | Google OAuth / phone OTP | not configured (needs Google Cloud creds / Twilio in dashboard) |
 
 ## 7. Roadmap ideas (discussed, not built)

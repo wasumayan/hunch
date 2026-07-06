@@ -1,6 +1,22 @@
 # Resume here — Hunch
 
-Cross-machine handoff snapshot. Last updated 2026-07-03. Read this first, then `HANDOFF.md`.
+Cross-machine handoff snapshot. Last updated 2026-07-05. Read this first, then `HANDOFF.md`.
+
+## ✅ LIVE — deployed to Vercel, virality betting verified end-to-end
+
+**Live URL: https://hunch-zeta.vercel.app** — renders correctly (Vercel serves real `text/html`;
+the Supabase edge URL served HTML as `text/plain`, so it's abandoned as the frontend host).
+Verified in a real browser on the live site: sign in → create circle → create a numeric market
+(with social-post link) → place a guess → resolve → correct winner, Δ-to-truth, and payout; zero
+console errors. Backend numeric-market migration applied + REST-verified (ledger nets to $0).
+
+- **Redeploy after frontend edits:** from repo root, `npx vercel@latest deploy --prod --yes`
+  (authed as `wasumayan`, project `hunch`). Not git-connected, so a GitHub push does NOT auto-deploy
+  — either run that command or connect the repo in the Vercel dashboard for push-to-deploy.
+- **One manual step left (email signups only):** Supabase → Auth → URL Configuration → set **Site URL**
+  to `https://hunch-zeta.vercel.app` and add it to the redirect allow-list, so confirmation emails land
+  on the app. Password sign-in already works without this. (Couldn't do headless — no Supabase
+  management token on this machine.)
 
 ## Where things stand right now
 
@@ -22,20 +38,13 @@ Cross-machine handoff snapshot. Last updated 2026-07-03. Read this first, then `
   `site_assets.app.js` row (but see the blocker — that URL doesn't render in browsers anyway).
 - **Docs:** design spec + phased roadmap in `docs/superpowers/specs/2026-07-03-*.md`.
 
-## ⛔ Blocker — do this first (it's the only thing between us and a live site)
+## Why Vercel (resolved context)
 
 The Supabase edge function serves the entry **HTML as `text/plain` on GET** (platform anti-phishing
-downgrade on `*.supabase.co`), so the app shows raw source and never boots in a browser. Backend is
-100% fine. Proof: `HEAD`→`text/html`, `GET`→`text/plain`; `app.js` GET is fine.
-
-**Fix = host the static frontend on Vercel** (repo root is already a working static site:
-`index.html` + `styles.css` + `app.js` + `config.js`; Supabase stays the backend):
-
-1. vercel.com → **Add New → Project** → import `wasumayan/hunch` → **Deploy** (no build step).
-2. Supabase → **Auth → URL Configuration** → set **Site URL** to the new `*.vercel.app` URL and add
-   it to the redirect allowlist. (This also fixes the old `localhost:3000` email-link issue.)
-3. Verify: open the Vercel URL → create a circle → **+ Market → Closest number** → place a guess →
-   resolve. Confirm it renders and pays out.
+downgrade on `*.supabase.co`) — proof: `HEAD`→`text/html`, `GET`→`text/plain`, while `app.js` GET is
+fine. So the app never booted in a browser from the edge URL. The repo root is a plain static site
+(`index.html` + `styles.css` + `app.js` + `config.js`), so hosting it on Vercel (which serves real
+`text/html`) fixed it. Supabase remains the backend, unchanged.
 
 ## Next up (roadmap, once hosting is live)
 

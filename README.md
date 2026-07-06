@@ -2,12 +2,13 @@
 
 **Private prediction markets for your friend group.** Got a feeling? Put a little money on it.
 
-**Live at: https://esjantuavbshexzaoact.supabase.co/functions/v1/app**
+**Live at: https://hunch-zeta.vercel.app**
 
-The app is served by the `app` Supabase Edge Function, which reads the frontend from the
-`site_assets` table (update those rows to ship UI changes — no redeploy needed). This repo's
-root is also a deploy-ready static site for Vercel: run `vercel login` then `vercel --prod`
-in this folder for a prettier URL (the Vercel CLI is already installed via the portable npm).
+The frontend is a plain static site (`index.html` + `styles.css` + `app.js` + `config.js`) hosted
+on **Vercel**; redeploy after edits with `npx vercel@latest deploy --prod --yes` from the repo root.
+Supabase is the backend (Postgres + Auth + RPCs). *Note: the old Supabase edge-function URL
+(`/functions/v1/app`) can't host the frontend — the platform serves its HTML as `text/plain` on GET
+— so Vercel is the frontend host. See `HANDOFF.md` §6.*
 
 > One-time setup: in [Supabase Auth → URL Configuration](https://supabase.com/dashboard/project/esjantuavbshexzaoact/auth/url-configuration),
 > set the Site URL to the live URL above so email-verification links land back on the app.

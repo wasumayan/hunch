@@ -12,3 +12,4 @@ test.md
 .playwright-mcp/
 auth.png
 .claude/launch.json
+.vercel
