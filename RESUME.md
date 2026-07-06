@@ -13,23 +13,13 @@ console errors. Backend numeric-market migration applied + REST-verified (ledger
 - **Redeploy after frontend edits:** from repo root, `npx vercel@latest deploy --prod --yes`
   (authed as `wasumayan`, project `hunch`). Not git-connected, so a GitHub push does NOT auto-deploy
   — either run that command or connect the repo in the Vercel dashboard for push-to-deploy.
-### ⚠️ Before inviting real people — the ONE remaining gate (2 dashboard toggles)
+### ✅ Onboarding works — friends can sign up instantly
 
-New-user onboarding does NOT work yet, and it's the only thing between "live" and "friends can join."
-Verified from the live auth settings: `email: true` is the **only** signup method (Google/phone/etc.
-all off) and `mailer_autoconfirm: false` — so a real signup requires clicking an email link, and that
-link goes to the Site URL, which is **still `localhost:3000`** → dead end. The built-in mailer is also
-capped ~2–4/hr. (I can't change auth config headless — no Supabase management token on the machine.)
-
-Fix in the Supabase dashboard (~2 min):
-1. **Authentication → URL Configuration → Site URL** = `https://hunch-zeta.vercel.app` (+ add it to the
-   redirect allow-list).
-2. **Authentication → Providers → Email → turn OFF "Confirm email"** (recommended for a friend group —
-   invitees get an instant session, no email round-trip). *Alternative if you want to keep
-   confirmation:* leave it on and add custom SMTP (Resend/Postmark) to beat the 2–4/hr cap.
-
-After that, an invite link → create account → straight into the circle. (Password sign-in already works
-today; this gate only affects brand-new signups.)
+Fixed 2026-07-05 via the Supabase Management API: **Site URL** = `https://hunch-zeta.vercel.app`
+(+ redirect allow-list), and **email confirmation turned OFF** (`mailer_autoconfirm: true`, since email
+was the only signup method). Verified with a real `/auth/v1/signup` — it returns an instant session,
+no confirmation email. So an invite link → create account → straight into the circle. (If you ever want
+email confirmation back on, add custom SMTP first to beat the ~2–4/hr built-in mailer cap.)
 
 ## Where things stand right now
 
