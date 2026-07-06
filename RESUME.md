@@ -60,6 +60,15 @@ fine. So the app never booted in a browser from the edge URL. The repo root is a
 (`index.html` + `styles.css` + `app.js` + `config.js`), so hosting it on Vercel (which serves real
 `text/html`) fixed it. Supabase remains the backend, unchanged.
 
+## Also live (2026-07-06)
+
+- **Hot suggestions** — 18 curated current-events questions (crypto/politics/macro/sports/tech, 3
+  numeric) + an **auto-refresh** edge function (`refresh_suggestions`) that pulls Polymarket's top
+  events daily via pg_cron (high-precision transform; secret-gated). See `HANDOFF.md` §7b.
+- **Discover circles** — a "Circles buzzing right now" strip on home (cosmetic hype circles in
+  `featured_groups`); "Request to join" records real interest in `featured_group_requests`. Read the
+  waitlist with the query in `HANDOFF.md` §7b.
+
 ## Next up (roadmap, once hosting is live)
 
 - **Phase 2 — KBC trivia** (ante → pot → ledger; no new money primitive).
