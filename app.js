@@ -362,12 +362,41 @@ async function homeView() {
             </div>
           </a>`).join('')}
       </div>` : ''}
+    ${(d.featured || []).length ? `
+      <div class="section-title">Circles buzzing right now</div>
+      <div class="stack">
+        ${d.featured.map((f) => `
+          <div class="card spread">
+            <div class="row">
+              <span class="tile-emoji">${esc(f.emoji)}</span>
+              <div>
+                <div style="font-weight:600; font-size:15.5px">${esc(f.name)}</div>
+                <div class="faint">${esc(f.blurb)}</div>
+                <div class="faint" style="margin-top:3px">🔒 closed · 👥 ${f.member_count} members</div>
+              </div>
+            </div>
+            <button class="btn-ghost req-join" data-id="${esc(f.id)}" ${f.requested ? 'disabled' : ''}>${f.requested ? 'Requested ✓' : 'Request to join'}</button>
+          </div>`).join('')}
+      </div>
+      <div class="faint" style="margin-top:8px">Closed circles are invite-only — request to join and you're on the waitlist ✨</div>` : ''}
     <div class="section-title">Join with an invite</div>
     <div class="card row">
       <input id="joinCode" placeholder="Paste an invite code or link" style="flex:1">
       <button class="btn-primary" id="joinGo">Join</button>
     </div>`;
   wireTopbar();
+
+  document.querySelectorAll('.req-join').forEach((b) => {
+    if (b.disabled) return;
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await rpc('request_featured_group', { p_featured: b.dataset.id });
+        b.textContent = 'Requested ✓';
+        toast("You're on the waitlist ✨");
+      } catch (err) { b.disabled = false; toast(err.message, true); }
+    };
+  });
 
   onClick('inviteAppBtn', () => copyInvite('app'));
   onClick('joinGo', async () => {
@@ -587,8 +616,8 @@ async function renderSuggested(groupId, members) {
     return { q: q.replaceAll('{name}', name), name: q.includes('{name}') ? name : null };
   };
   const card = (item, filled) => `
-    <div class="sug-card" data-q="${esc(filled?.q || item.question)}" data-d="${esc(item.details || '')}" data-subject="${esc(filled?.name || '')}">
-      <div class="sug-cat">${esc(item.category)}${item.tag ? ` · matched your circle's “${esc(item.tag)}” tag` : ''}</div>
+    <div class="sug-card" data-q="${esc(filled?.q || item.question)}" data-d="${esc(item.details || '')}" data-subject="${esc(filled?.name || '')}" data-kind="${esc(item.kind || 'binary')}" data-metric="${esc(item.metric || '')}">
+      <div class="sug-cat">${esc(item.category)}${item.kind === 'numeric' ? ' · 🎯 closest guess' : ''}${item.tag ? ` · matched your circle's “${esc(item.tag)}” tag` : ''}</div>
       <div class="sug-q">${esc(filled?.q || item.question)}</div>
     </div>`;
   document.getElementById('tabBody').innerHTML = `
@@ -604,6 +633,8 @@ async function renderSuggested(groupId, members) {
     c.onclick = () => marketComposer(groupId, members, {
       question: c.dataset.q, details: c.dataset.d,
       subjectName: c.dataset.subject || null,
+      kind: c.dataset.kind || 'binary',
+      metric: c.dataset.metric || null,
     });
   });
 }
