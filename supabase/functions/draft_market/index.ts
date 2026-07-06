@@ -1,18 +1,25 @@
 // Edge function: plain-English -> drafted Hunch market via any OpenAI-compatible LLM.
-// Provider-agnostic — set LLM_API_KEY, and optionally LLM_BASE_URL + LLM_MODEL. Works with
-// Groq (free), Google Gemini (free, via its OpenAI-compatible endpoint), OpenRouter free
-// models, DeepSeek, or a self-hosted endpoint. Defaults to Groq's free Llama.
-// verify_jwt + a signed-in-user check keep the public key from spending the LLM budget.
+// Provider-agnostic — set LLM_API_KEY, and optionally LLM_BASE_URL + LLM_MODEL. Defaults to
+// Groq's free Llama. Called from the browser, so it handles CORS + does its own signed-in check
+// (verify_jwt is OFF so the CORS preflight isn't blocked; the /auth/v1/user check guards the key).
 
 const API_KEY = Deno.env.get('LLM_API_KEY') || '';
 const BASE = Deno.env.get('LLM_BASE_URL') || 'https://api.groq.com/openai/v1';
 const MODEL = Deno.env.get('LLM_MODEL') || 'llama-3.3-70b-versatile';
 
+const CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 function json(o: unknown, status = 200) {
-  return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
+  return new Response(JSON.stringify(o), { status, headers: { ...CORS, 'content-type': 'application/json' } });
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   const who = await fetch((Deno.env.get('SUPABASE_URL') || '') + '/auth/v1/user', {
     headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') || '', Authorization: 'Bearer ' + token },
