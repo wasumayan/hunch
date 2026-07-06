@@ -75,11 +75,12 @@ fine. So the app never booted in a browser from the edge URL. The repo root is a
   (`send_friend_request`/`respond_friend_request`, reciprocal auto-accept), friend invite links
   (invites 'friend' kind), and "Bet <friend>" → `bet_friend` creates a private 2-person "duo" circle
   (`groups.is_duo`, excluded from the main circles list) that reuses the whole engine.
-- **AI event creation** — composer "Describe it" input → `draft_market` edge function (Anthropic Claude,
-  `claude-haiku-4-5`) drafts question/kind/metric/close/details. verify_jwt + a signed-in-user check so
-  the public key can't spend the LLM budget. **NEEDS ACTIVATION:** set the `ANTHROPIC_API_KEY` function
-  secret (Supabase → Edge Functions → draft_market → Secrets, or via the Management API). Returns a
-  graceful 503 until then.
+- **AI event creation** — composer "Describe it" input → `draft_market` edge function
+  (**provider-agnostic**: any OpenAI-compatible LLM; defaults to Groq's free Llama) drafts
+  question/kind/metric/close/details. verify_jwt + a signed-in-user check so the public key can't spend
+  the LLM budget. **NEEDS ACTIVATION:** set `LLM_API_KEY` (optionally `LLM_BASE_URL` + `LLM_MODEL`) as
+  `draft_market` function secrets — works with the free tiers of Groq / Google Gemini / OpenRouter, or
+  DeepSeek. Graceful 503 until then.
 
 ## Next up (roadmap, once hosting is live)
 

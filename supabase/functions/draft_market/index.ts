@@ -1,17 +1,18 @@
-// Edge function: turn a plain-English sentence into a drafted Hunch market.
-// Calls Anthropic (Claude) with the caller's words, returns structured JSON the
-// composer prefills. verify_jwt is ON, so only signed-in users can spend the key.
-// Set the ANTHROPIC_API_KEY function secret to activate; until then it returns 503.
+// Edge function: plain-English -> drafted Hunch market via any OpenAI-compatible LLM.
+// Provider-agnostic — set LLM_API_KEY, and optionally LLM_BASE_URL + LLM_MODEL. Works with
+// Groq (free), Google Gemini (free, via its OpenAI-compatible endpoint), OpenRouter free
+// models, DeepSeek, or a self-hosted endpoint. Defaults to Groq's free Llama.
+// verify_jwt + a signed-in-user check keep the public key from spending the LLM budget.
 
-const KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
-const MODEL = Deno.env.get('DRAFT_MODEL') || 'claude-haiku-4-5-20251001';
+const API_KEY = Deno.env.get('LLM_API_KEY') || '';
+const BASE = Deno.env.get('LLM_BASE_URL') || 'https://api.groq.com/openai/v1';
+const MODEL = Deno.env.get('LLM_MODEL') || 'llama-3.3-70b-versatile';
 
 function json(o: unknown, status = 200) {
   return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 }
 
 Deno.serve(async (req) => {
-  // Require a real signed-in user (the public anon key must NOT be able to spend the LLM key).
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   const who = await fetch((Deno.env.get('SUPABASE_URL') || '') + '/auth/v1/user', {
     headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') || '', Authorization: 'Bearer ' + token },
@@ -22,7 +23,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch (_e) { /* ignore */ }
   const text = String(body.text || '').trim().slice(0, 500);
   if (text.length < 3) return json({ error: 'Describe your bet in a sentence.' }, 400);
-  if (!KEY) return json({ error: 'AI drafting is not configured yet — add an Anthropic API key.' }, 503);
+  if (!API_KEY) return json({ error: 'AI drafting is not configured yet — add a free LLM key.' }, 503);
 
   const today = new Date().toISOString().slice(0, 10);
   const system = [
@@ -38,10 +39,13 @@ Deno.serve(async (req) => {
 
   let r: Response;
   try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
+    r = await fetch(BASE + '/chat/completions', {
       method: 'POST',
-      headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 400, system, messages: [{ role: 'user', content: text }] }),
+      headers: { Authorization: 'Bearer ' + API_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL, temperature: 0.2, max_tokens: 400,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: text }],
+      }),
     });
   } catch (e) {
     return json({ error: 'Could not reach the AI service', detail: String(e) }, 502);
@@ -49,7 +53,8 @@ Deno.serve(async (req) => {
   if (!r.ok) return json({ error: 'AI draft failed', detail: (await r.text()).slice(0, 300) }, 502);
 
   const data = await r.json();
-  const raw = (data && data.content && data.content[0] && data.content[0].text ? data.content[0].text : '').trim();
+  const rawText = (data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '') || '';
+  const raw = String(rawText).trim();
   const s = raw.indexOf('{');
   const e = raw.lastIndexOf('}');
   let parsed: any = null;
