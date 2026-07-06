@@ -147,7 +147,7 @@ Pattern used for the 64-check e2e suite (worth recreating in `tests/`):
 | Supabase **Auth Site URL** | ⚠️ still `localhost:3000` — set it to the live URL at [Auth → URL Configuration](https://supabase.com/dashboard/project/esjantuavbshexzaoact/auth/url-configuration) so email-verification links land on the app |
 | Custom SMTP | ⚠️ optional — built-in sender is rate-limited (~2–4 emails/hr); add SMTP before onboarding many friends at once |
 | Vercel (frontend host) | ✅ deployed & live at https://hunch-zeta.vercel.app (project `hunch`, account `wasumayan`). Not git-connected — redeploy with `npx vercel@latest deploy --prod --yes`, or connect the repo in the Vercel dashboard for push-to-deploy. |
-| Supabase Auth Site URL | ⚠️ **last manual step for email signups:** set Site URL + redirect allow-list to `https://hunch-zeta.vercel.app` (Auth → URL Configuration). Password sign-in already works; this only affects signup-confirmation email links. |
+| New-user onboarding (Auth) | ⚠️ **GATE before inviting people.** Live settings: email is the only signup method (`mailer_autoconfirm: false`), and Site URL is still `localhost:3000` → confirmation links dead-end. Fix (dashboard, ~2 min): (1) Auth → URL Configuration → Site URL = `https://hunch-zeta.vercel.app` + allow-list; (2) Auth → Providers → Email → turn OFF "Confirm email" (recommended for a friend group), or keep it on and add custom SMTP (beats the ~2–4/hr cap). Password sign-in already works. |
 | Google OAuth / phone OTP | not configured (needs Google Cloud creds / Twilio in dashboard) |
 
 ## 7. Roadmap ideas (discussed, not built)
