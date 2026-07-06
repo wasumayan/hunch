@@ -159,6 +159,34 @@ Pattern used for the 64-check e2e suite (worth recreating in `tests/`):
 - Multi-outcome (non-binary) markets; push notifications; PWA manifest for
   add-to-home-screen; market edit/delete; admin transfer.
 
+## 7b. Discover circles & auto-refreshed suggestions (built 2026-07-06)
+
+**Suggestions** now carry `source` (`seed` curated / `polymarket` auto / null original),
+`kind` (`binary`|`numeric`) and `metric` — numeric suggestions open the composer in
+closest-guess mode. 18 curated current-events seeds are in
+`supabase/migrations/20260706_seed_suggestions_and_featured.sql`.
+
+**Auto-refresh:** edge function `refresh_suggestions` (`verify_jwt` off; gated by the
+`x-refresh-secret` header == the `REFRESH_SECRET` function secret) fetches Polymarket's top
+events, keeps only titles that cleanly become questions (high-precision — rejects
+vs/props/blanks/date-ranges/colon-prefixes), and **replaces the `source='polymarket'` rows**
+(curated + original untouched). Scheduled by **pg_cron** job `refresh-suggestions-daily`
+(13:00 UTC) via pg_net. Source: `supabase/functions/refresh_suggestions/`.
+- Run now: `curl -X POST https://esjantuavbshexzaoact.supabase.co/functions/v1/refresh_suggestions -H "x-refresh-secret: <REFRESH_SECRET>"`
+- Pause: `select cron.unschedule('refresh-suggestions-daily');`
+
+**Discover ("Circles buzzing right now"):** cosmetic hype circles in `public.featured_groups`
+(public read) rendered on the home screen. "Request to join" calls `request_featured_group()`,
+which records a row in `featured_group_requests` (deny-by-default; only reachable via the RPC).
+It is a **real interest list** — see who wants in:
+```sql
+select fg.emoji, fg.name, p.username, r.created_at
+from featured_group_requests r
+join featured_groups fg on fg.id = r.featured_group_id
+join profiles p on p.id = r.user_id order by r.created_at desc;
+```
+Edit the circles by updating `featured_groups` rows (name / emoji / blurb / member_count / sort_order).
+
 ## 8. Appendix: `app` edge function source
 
 ```ts
