@@ -138,6 +138,7 @@ function topbar(active = '') {
       <div class="nav">
         <a href="#/" class="${active === 'home' ? 'on' : ''}">Circles</a>
         <a href="#/community" class="${active === 'community' ? 'on' : ''}">Community</a>
+        <a href="#/friends" class="${active === 'friends' ? 'on' : ''}">Friends</a>
         ${myProfile ? `<a href="#/u/${myProfile.id}" class="${active === 'me' ? 'on' : ''}" title="Your profile" style="padding:4px 6px">${avatar(myProfile.display_name, true)}</a>` : ''}
         <button class="navlink" id="signOutBtn">Sign out</button>
       </div>
@@ -161,6 +162,7 @@ async function redeemPending() {
     const r = await rpc('redeem_invite', { p_code: code });
     if (r.kind === 'group') { toast('Welcome to the circle!'); return `#/g/${r.group_id}`; }
     if (r.kind === 'market') { toast('You are in — place your bet.'); return `#/m/${r.market_id}`; }
+    if (r.kind === 'friend') { toast("You're now friends! 🎉"); return '#/friends'; }
     toast('Welcome to Hunch!');
   } catch (err) {
     toast(err.message, true);
@@ -288,7 +290,9 @@ async function inviteLandingView(code) {
     ? `join <b>${esc(p.group_emoji || '')} ${esc(p.group_name)}</b> (${p.member_count} member${p.member_count === 1 ? '' : 's'})`
     : p.kind === 'market'
       ? `bet on <b>“${esc(p.question)}”</b>`
-      : `join <b>Hunch</b>`;
+      : p.kind === 'friend'
+        ? `be friends with <b>${esc(p.inviter || 'a friend')}</b> on Hunch`
+        : `join <b>Hunch</b>`;
   app.innerHTML = `
     <div class="auth-wrap">
       <div class="hero">
@@ -431,7 +435,7 @@ async function homeView() {
     if (m) v = m[1];
     if (!v) throw new Error('Paste an invite code or link');
     const r = await rpc('redeem_invite', { p_code: v });
-    location.hash = r.kind === 'market' ? `#/m/${r.market_id}` : r.kind === 'group' ? `#/g/${r.group_id}` : '#/';
+    location.hash = r.kind === 'market' ? `#/m/${r.market_id}` : r.kind === 'group' ? `#/g/${r.group_id}` : r.kind === 'friend' ? '#/friends' : '#/';
     if (r.kind !== 'app') toast('You are in!');
   });
 
@@ -1164,6 +1168,90 @@ function numericMarketView(marketId, d) {
 
 // ---------- community ----------
 
+async function friendsView() {
+  clearInterval(pollTimer);
+  const d = await rpc('get_friends');
+  app.innerHTML = `
+    ${topbar('friends')}
+    <div class="spread" style="margin: 4px 0 16px">
+      <h1 style="font-size:22px">Friends</h1>
+      <button class="btn-coral" id="inviteFriendBtn">Invite a friend</button>
+    </div>
+    <div class="card">
+      <label>Add a friend</label>
+      <input id="friendSearch" placeholder="Search a username or name…" autocomplete="off">
+      <div id="searchResults" style="margin-top:4px"></div>
+    </div>
+    ${(d.incoming || []).length ? `
+      <div class="section-title">Friend requests</div>
+      <div class="card">
+        ${d.incoming.map((u) => `
+          <div class="pos-row">
+            <div class="row">${avatar(u.display_name)} <div><b>${esc(u.display_name)}</b> <span class="faint">@${esc(u.username)}</span></div></div>
+            <div class="row"><button class="btn-ghost fr-yes" data-u="${esc(u.id)}">Accept</button><button class="linkbtn fr-no" data-u="${esc(u.id)}">Ignore</button></div>
+          </div>`).join('')}
+      </div>` : ''}
+    <div class="section-title">Your friends${(d.friends || []).length ? ` · ${d.friends.length}` : ''}</div>
+    <div class="card">
+      ${(d.friends || []).length === 0 ? '<div class="empty">No friends yet — search above, or tap “Invite a friend” to send a link.</div>' : d.friends.map((u) => `
+        <div class="pos-row">
+          <a href="#/u/${u.id}" class="row" style="color:inherit; text-decoration:none">${avatar(u.display_name)} <div><b>${esc(u.display_name)}</b> <span class="faint">@${esc(u.username)}</span></div></a>
+          <button class="btn-coral bet-friend" data-u="${esc(u.id)}">Bet ${esc((u.display_name || '').split(' ')[0])}</button>
+        </div>`).join('')}
+    </div>
+    ${(d.outgoing || []).length ? `<div class="faint" style="margin-top:10px">Requested: ${d.outgoing.map((u) => '@' + esc(u.username)).join(', ')}</div>` : ''}`;
+  wireTopbar();
+  onClick('inviteFriendBtn', () => copyInvite('friend'));
+
+  const results = document.getElementById('searchResults');
+  const si = document.getElementById('friendSearch');
+  let timer;
+  const wireResultBtns = () => {
+    results.querySelectorAll('.add-friend').forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      try { const r = await rpc('send_friend_request', { p_to: b.dataset.u }); toast(r.status === 'friends' ? "You're friends! 🎉" : 'Request sent'); friendsView(); }
+      catch (err) { b.disabled = false; toast(err.message, true); }
+    });
+    results.querySelectorAll('.acc-friend').forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      try { await rpc('respond_friend_request', { p_from: b.dataset.u, p_accept: true }); toast("You're friends! 🎉"); friendsView(); }
+      catch (err) { b.disabled = false; toast(err.message, true); }
+    });
+  };
+  const renderResults = (list) => {
+    results.innerHTML = (list || []).map((u) => {
+      const action = u.status === 'friends' ? '<span class="chip yes">friends</span>'
+        : u.status === 'requested' ? '<span class="chip">requested</span>'
+        : u.status === 'incoming' ? `<button class="btn-ghost acc-friend" data-u="${esc(u.id)}">Accept</button>`
+        : `<button class="btn-ghost add-friend" data-u="${esc(u.id)}">Add</button>`;
+      return `<div class="pos-row"><div class="row">${avatar(u.display_name, true)} <div><b style="font-size:14px">${esc(u.display_name)}</b> <span class="faint">@${esc(u.username)}</span></div></div>${action}</div>`;
+    }).join('');
+    wireResultBtns();
+  };
+  si.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = si.value.trim();
+    if (q.length < 2) { results.innerHTML = ''; return; }
+    timer = setTimeout(async () => { try { renderResults(await rpc('search_users', { p_q: q })); } catch (e) { /* ignore */ } }, 250);
+  });
+
+  app.querySelectorAll('.fr-yes, .fr-no').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      const accept = b.classList.contains('fr-yes');
+      try { await rpc('respond_friend_request', { p_from: b.dataset.u, p_accept: accept }); toast(accept ? "You're friends! 🎉" : 'Ignored'); friendsView(); }
+      catch (err) { b.disabled = false; toast(err.message, true); }
+    };
+  });
+  app.querySelectorAll('.bet-friend').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { const gid = await rpc('bet_friend', { p_friend: b.dataset.u }); toast('Your 1:1 with them — open a market'); location.hash = `#/g/${gid}`; }
+      catch (err) { b.disabled = false; toast(err.message, true); }
+    };
+  });
+}
+
 async function communityView() {
   const feed = await rpc('get_community_feed');
   app.innerHTML = `
@@ -1349,6 +1437,8 @@ async function render() {
       await profileView(m[1]);
     } else if (hash === '#/community') {
       await communityView();
+    } else if (hash === '#/friends') {
+      await friendsView();
     } else {
       await homeView();
     }
