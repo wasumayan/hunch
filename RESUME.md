@@ -68,6 +68,18 @@ fine. So the app never booted in a browser from the edge URL. The repo root is a
 - **Discover circles** — a "Circles buzzing right now" strip on home (cosmetic hype circles in
   `featured_groups`); "Request to join" records real interest in `featured_group_requests`. Read the
   waitlist with the query in `HANDOFF.md` §7b.
+- **Private vs discoverable circles** — `groups.visibility` ('private' default / 'discoverable'). Real
+  discoverable circles show in Discover with a genuine request-to-join → admin approves (`request_join_circle`
+  / `resolve_join_request`; pending requests show to admins in the group view).
+- **Friends + 1:1 bets** — Friends tab (`#/friends`): search by username, friend requests
+  (`send_friend_request`/`respond_friend_request`, reciprocal auto-accept), friend invite links
+  (invites 'friend' kind), and "Bet <friend>" → `bet_friend` creates a private 2-person "duo" circle
+  (`groups.is_duo`, excluded from the main circles list) that reuses the whole engine.
+- **AI event creation** — composer "Describe it" input → `draft_market` edge function (Anthropic Claude,
+  `claude-haiku-4-5`) drafts question/kind/metric/close/details. verify_jwt + a signed-in-user check so
+  the public key can't spend the LLM budget. **NEEDS ACTIVATION:** set the `ANTHROPIC_API_KEY` function
+  secret (Supabase → Edge Functions → draft_market → Secrets, or via the Management API). Returns a
+  graceful 503 until then.
 
 ## Next up (roadmap, once hosting is live)
 
