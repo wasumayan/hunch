@@ -27,6 +27,11 @@ friend group), and the auth email rate limit was raised `2 → 30`/hr. Set 2026-
 API; a test signup returned a queued confirmation email (HTTP 200). To rotate the password later: revoke
 the app password at myaccount.google.com/apppasswords and re-run the SMTP PATCH with a new one.
 
+**Branded confirmation email.** The signup confirmation email is customized with Hunch branding (subject
+*"You're almost in — confirm your email 🔮"*). Source of truth: `supabase/email-templates/confirmation.html`.
+To re-apply after a config reset, PATCH `mailer_subjects_confirmation` + `mailer_templates_confirmation_content`
+on `/v1/projects/<ref>/config/auth` (keep the `{{ .ConfirmationURL }}` variable intact).
+
 ## Where things stand right now
 
 **Virality betting (numeric closest-guess markets + social-post attachment) is BUILT, deployed, and verified.**
