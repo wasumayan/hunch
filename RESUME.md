@@ -21,10 +21,11 @@ click a verification link in their email before they can get in. The app already
 "Check your inbox" + a Resend button), and the Site URL fix means the link now lands on the live app
 (it previously pointed at `localhost:3000`, which is why onboarding was broken).
 
-⚠️ **Reliability caveat — set up custom SMTP.** Supabase's built-in mailer is rate-limited to ~2–4
-emails/hr and is meant for testing only; with verification required, that throttles real signups. Add
-custom SMTP (e.g. Resend — free ~100/day) under Auth → SMTP Settings, or ask Claude to configure it via
-the Management API given a Resend API key + a verified sender address.
+✅ **Custom SMTP configured (Gmail).** Verification emails send via `smtp.gmail.com` as
+`Hunch <wasumayan@gmail.com>` (Gmail App Password stored in Supabase auth config; ~500/day, plenty for a
+friend group), and the auth email rate limit was raised `2 → 30`/hr. Set 2026-07-05 via the Management
+API; a test signup returned a queued confirmation email (HTTP 200). To rotate the password later: revoke
+the app password at myaccount.google.com/apppasswords and re-run the SMTP PATCH with a new one.
 
 ## Where things stand right now
 
