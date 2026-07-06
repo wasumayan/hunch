@@ -13,13 +13,18 @@ console errors. Backend numeric-market migration applied + REST-verified (ledger
 - **Redeploy after frontend edits:** from repo root, `npx vercel@latest deploy --prod --yes`
   (authed as `wasumayan`, project `hunch`). Not git-connected, so a GitHub push does NOT auto-deploy
   — either run that command or connect the repo in the Vercel dashboard for push-to-deploy.
-### ✅ Onboarding works — friends can sign up instantly
+### Onboarding — email verification required (by design)
 
-Fixed 2026-07-05 via the Supabase Management API: **Site URL** = `https://hunch-zeta.vercel.app`
-(+ redirect allow-list), and **email confirmation turned OFF** (`mailer_autoconfirm: true`, since email
-was the only signup method). Verified with a real `/auth/v1/signup` — it returns an instant session,
-no confirmation email. So an invite link → create account → straight into the circle. (If you ever want
-email confirmation back on, add custom SMTP first to beat the ~2–4/hr built-in mailer cap.)
+Auth config (set 2026-07-05 via Management API): **Site URL** = `https://hunch-zeta.vercel.app`
+(+ redirect allow-list), and **email confirmation ON** (`mailer_autoconfirm: false`) — new users must
+click a verification link in their email before they can get in. The app already handles this (shows
+"Check your inbox" + a Resend button), and the Site URL fix means the link now lands on the live app
+(it previously pointed at `localhost:3000`, which is why onboarding was broken).
+
+⚠️ **Reliability caveat — set up custom SMTP.** Supabase's built-in mailer is rate-limited to ~2–4
+emails/hr and is meant for testing only; with verification required, that throttles real signups. Add
+custom SMTP (e.g. Resend — free ~100/day) under Auth → SMTP Settings, or ask Claude to configure it via
+the Management API given a Resend API key + a verified sender address.
 
 ## Where things stand right now
 
